@@ -6,19 +6,14 @@ import { UI } from './ui.js';
 const canvas = document.getElementById('drawing-canvas');
 const engine = new CanvasEngine(canvas);
 
-// Size canvas to fill available space
+// Size canvas to fill full screen (toolbar floats over it)
 function resizeCanvas() {
-  const app = document.getElementById('app');
-  const topBar = document.getElementById('top-toolbar');
-  const bottomBar = document.getElementById('bottom-toolbar');
-  const availHeight = app.clientHeight - topBar.offsetHeight - bottomBar.offsetHeight;
-  const availWidth = app.clientWidth;
-
-  // Use device pixel ratio for crisp rendering
+  const w = window.innerWidth;
+  const h = window.innerHeight;
   const dpr = window.devicePixelRatio || 1;
-  canvas.style.width = availWidth + 'px';
-  canvas.style.height = availHeight + 'px';
-  engine.resize(availWidth * dpr, availHeight * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  engine.resize(w * dpr, h * dpr);
 }
 
 resizeCanvas();

@@ -112,23 +112,20 @@ export class UI {
     this._buildOptionsDialog();
     this._buildPlaybackDialog();
 
-    // Close buttons
-    document.querySelectorAll('.dialog-close').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.closest('.dialog').classList.add('hidden');
-      });
-    });
-
-    // Click outside to close
-    document.querySelectorAll('.dialog').forEach(dialog => {
-      dialog.addEventListener('click', (e) => {
-        if (e.target === dialog) dialog.classList.add('hidden');
-      });
-    });
   }
 
   _showDialog(id) {
-    document.getElementById(id).classList.remove('hidden');
+    const dialog = document.getElementById(id);
+    dialog.classList.remove('hidden');
+
+    // Close on backdrop/overlay click (re-register each open to keep it simple)
+    const handler = (e) => {
+      if (e.target === dialog || e.target.classList.contains('dialog-backdrop')) {
+        dialog.classList.add('hidden');
+        dialog.removeEventListener('click', handler);
+      }
+    };
+    dialog.addEventListener('click', handler);
   }
 
   _buildPatternDialog() {

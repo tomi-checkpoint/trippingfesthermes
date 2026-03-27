@@ -1,4 +1,4 @@
 export default {
-  base: '/trippingfest/',
+  base: '/',
   build: { outDir: 'dist' }
 };
