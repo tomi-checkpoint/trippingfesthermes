@@ -299,6 +299,19 @@ export class UI {
     sameLabel.appendChild(document.createTextNode(' Same Color for All Mirrors'));
     mirrorOpts.appendChild(sameLabel);
 
+    // Off-center mirroring
+    const offLabel = document.createElement('label');
+    const offCb = document.createElement('input');
+    offCb.type = 'checkbox';
+    offCb.checked = ms.offCenter;
+    offCb.addEventListener('change', () => {
+      ms.offCenter = offCb.checked;
+      if (ms.offCenter) ms.randomizeCenter();
+    });
+    offLabel.appendChild(offCb);
+    offLabel.appendChild(document.createTextNode(' Off-Center Mirroring'));
+    mirrorOpts.appendChild(offLabel);
+
     // Transparency
     transpCtrl.innerHTML = '';
     const tLabel = document.createElement('label');

@@ -7,6 +7,26 @@ export class MirrorSystem {
     this.polar = false;        // N-fold radial
     this.sameColor = true;     // same color for all mirrors
     this.polarFolds = 0;       // number of polar subdivisions
+    this.offCenter = false;    // randomize mirror center
+    this._offCenterX = 0.5;    // normalized offset (0-1)
+    this._offCenterY = 0.5;
+  }
+
+  // Call on each new stroke to re-randomize the center
+  randomizeCenter() {
+    if (!this.offCenter) return;
+    // Count active mirrors to scale randomness
+    let count = 0;
+    if (this.vertical) count++;
+    if (this.horizontal) count++;
+    if (this.diagonal1) count++;
+    if (this.diagonal2) count++;
+    if (this.polar) count += this.polarFolds || 1;
+    // More mirrors → keep center closer to middle so everything stays visible
+    // Range: 0.15–0.85 for 1 mirror, 0.3–0.7 for many
+    const spread = Math.max(0.15, 0.35 - count * 0.03);
+    this._offCenterX = 0.5 + (Math.random() - 0.5) * 2 * spread;
+    this._offCenterY = 0.5 + (Math.random() - 0.5) * 2 * spread;
   }
 
   // Parse the options field from recording format:
@@ -26,8 +46,8 @@ export class MirrorSystem {
   }
 
   getTransformedPoints(x, y, canvasWidth, canvasHeight) {
-    const cx = canvasWidth / 2;
-    const cy = canvasHeight / 2;
+    const cx = this.offCenter ? canvasWidth * this._offCenterX : canvasWidth / 2;
+    const cy = this.offCenter ? canvasHeight * this._offCenterY : canvasHeight / 2;
     const points = [{ x, y }];
 
     if (this.polar && this.polarFolds > 0) {

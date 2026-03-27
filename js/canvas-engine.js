@@ -81,6 +81,7 @@ export class CanvasEngine {
     this._embossMinX = this._embossMinY = this._embossMaxX = this._embossMaxY = null;
     this.undoStack.save();
     this.colorSystem.onNewStroke();
+    this.mirrorSystem.randomizeCenter();
     this._applyCtxState();
 
     const points = this.mirrorSystem.getTransformedPoints(x, y, this.canvas.width, this.canvas.height);
