@@ -358,7 +358,7 @@ export class UI {
       const item = document.createElement('div');
       item.className = 'recording-item';
       const img = document.createElement('img');
-      img.src = `/assets/demos/Demo${i}.png`;
+      img.src = `assets/demos/Demo${i}.png`;
       img.alt = `Demo ${i}`;
       const label = document.createElement('span');
       label.textContent = `Demo ${i}`;
@@ -380,7 +380,7 @@ export class UI {
     document.getElementById('playback-dialog').classList.add('hidden');
 
     try {
-      const resp = await fetch(`/assets/demos/Demo${num}.recording`);
+      const resp = await fetch(`assets/demos/Demo${num}.recording`);
       const text = await resp.text();
       this.engine.clear();
       this.player.load(text);
