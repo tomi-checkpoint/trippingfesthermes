@@ -1,8 +1,13 @@
 export class ColorSystem {
   constructor() {
-    this.mode = 'simple'; // simple, gradient, random, rangedRandom, smoothRandom, background
+    this.mode = 'simple'; // simple, gradient, multiGradient, random, rangedRandom, smoothRandom, background
     this.color1 = { r: 255, g: 255, b: 255, a: 255 };
     this.color2 = { r: 0, g: 255, b: 255, a: 255 };
+    this.gradientColors = [
+      { r: 255, g: 0, b: 0, a: 255 },
+      { r: 0, g: 255, b: 0, a: 255 },
+      { r: 0, g: 0, b: 255, a: 255 },
+    ];
     this.bgColor = { r: 0, g: 0, b: 0, a: 255 };
     this.transparency = 100; // 0-100, maps to alpha
     this.colorAlpha = 100; // per-color-mode alpha (0-100)
@@ -77,6 +82,24 @@ export class ColorSystem {
         const h = this._lerp(hsv1.h, hsv2.h, progress);
         const s = this._lerp(hsv1.s, hsv2.s, progress);
         const v = this._lerp(hsv1.v, hsv2.v, progress);
+        const rgb = this._hsvToRgb(h, s, v);
+        return `rgba(${rgb.r|0},${rgb.g|0},${rgb.b|0},${alpha})`;
+      }
+
+      case 'multiGradient': {
+        const colors = this.gradientColors;
+        if (colors.length < 2) return this._rgba(colors[0] || this.color1, alpha);
+        const segments = colors.length - 1;
+        const cyclePeriod = 200 * segments;
+        const progress = (this._t++ % cyclePeriod) / cyclePeriod; // 0..1 repeating
+        const pos = progress * segments;
+        const idx = Math.min(Math.floor(pos), segments - 1);
+        const localT = pos - idx;
+        const hsv1 = this._rgbToHsv(colors[idx]);
+        const hsv2 = this._rgbToHsv(colors[idx + 1]);
+        const h = this._lerp(hsv1.h, hsv2.h, localT);
+        const s = this._lerp(hsv1.s, hsv2.s, localT);
+        const v = this._lerp(hsv1.v, hsv2.v, localT);
         const rgb = this._hsvToRgb(h, s, v);
         return `rgba(${rgb.r|0},${rgb.g|0},${rgb.b|0},${alpha})`;
       }

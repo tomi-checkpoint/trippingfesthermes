@@ -155,6 +155,7 @@ export class UI {
     const modes = [
       { id: 'simple', label: 'Simple' },
       { id: 'gradient', label: 'Gradient' },
+      { id: 'multiGradient', label: 'Multi Gradient' },
       { id: 'random', label: 'Random' },
       { id: 'rangedRandom', label: 'Ranged Random' },
       { id: 'smoothRandom', label: 'Smooth Random' },
@@ -209,6 +210,55 @@ export class UI {
       });
       label2.appendChild(input2);
       controls.appendChild(label2);
+    }
+
+    if (cs.mode === 'multiGradient') {
+      const container = document.createElement('div');
+      container.id = 'multi-gradient-colors';
+
+      const renderColors = () => {
+        container.innerHTML = '';
+        cs.gradientColors.forEach((c, i) => {
+          const row = document.createElement('label');
+          row.textContent = `Color ${i + 1}: `;
+          const input = document.createElement('input');
+          input.type = 'color';
+          input.value = this._rgbToHex(c);
+          input.addEventListener('input', () => {
+            cs.gradientColors[i] = this._hexToRgb(input.value);
+          });
+          row.appendChild(input);
+
+          if (cs.gradientColors.length > 2) {
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '\u2212';
+            removeBtn.style.cssText = 'width:28px;height:28px;margin-left:8px;background:rgba(255,60,60,0.25);color:#ff6b6b;border:1px solid rgba(255,60,60,0.3);border-radius:8px;cursor:pointer;font-size:16px;line-height:1';
+            removeBtn.addEventListener('click', () => {
+              cs.gradientColors.splice(i, 1);
+              renderColors();
+            });
+            row.appendChild(removeBtn);
+          }
+
+          container.appendChild(row);
+        });
+
+        if (cs.gradientColors.length < 5) {
+          const addBtn = document.createElement('button');
+          addBtn.textContent = '+ Add Color';
+          addBtn.style.cssText = 'margin-top:6px;padding:8px 16px;background:rgba(96,165,250,0.2);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);border-radius:8px;cursor:pointer;font-size:13px;font-weight:500';
+          addBtn.addEventListener('click', () => {
+            const hue = (cs.gradientColors.length * 72) % 360;
+            const rgb = cs._hsvToRgb(hue, 90, 90);
+            cs.gradientColors.push({ r: rgb.r | 0, g: rgb.g | 0, b: rgb.b | 0, a: 255 });
+            renderColors();
+          });
+          container.appendChild(addBtn);
+        }
+      };
+
+      renderColors();
+      controls.appendChild(container);
     }
 
     if (cs.mode === 'smoothRandom') {
