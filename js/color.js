@@ -13,6 +13,7 @@ export class ColorSystem {
     this.colorAlpha = 100; // per-color-mode alpha (0-100)
     this.changeEveryTouch = false;
     this.smoothness = 0.5;
+    this.gradientLength = 200; // pixels per gradient segment
     this.colorSpace = 0; // 0=RGB, 1=HSV
 
     // Internal state
@@ -74,11 +75,13 @@ export class ColorSystem {
         return this._rgba(this.color1, alpha);
 
       case 'gradient': {
-        // Cycle continuously through HSV space between color1 and color2
+        // Ping-pong between color1 and color2 (smooth fade back)
         const hsv1 = this._rgbToHsv(this.color1);
         const hsv2 = this._rgbToHsv(this.color2);
-        const cyclePeriod = 200; // pixels of stroke length per full cycle
-        const progress = (this._t++ % cyclePeriod) / cyclePeriod; // 0..1 repeating
+        const segLen = this.gradientLength || 200;
+        const cyclePeriod = segLen * 2; // full round trip
+        const raw = (this._t++ % cyclePeriod) / segLen; // 0..2
+        const progress = raw <= 1 ? raw : 2 - raw; // ping-pong 0→1→0
         const h = this._lerp(hsv1.h, hsv2.h, progress);
         const s = this._lerp(hsv1.s, hsv2.s, progress);
         const v = this._lerp(hsv1.v, hsv2.v, progress);
@@ -87,16 +90,19 @@ export class ColorSystem {
       }
 
       case 'multiGradient': {
+        // Loop: last color fades back to first color for seamless cycling
         const colors = this.gradientColors;
         if (colors.length < 2) return this._rgba(colors[0] || this.color1, alpha);
-        const segments = colors.length - 1;
-        const cyclePeriod = 200 * segments;
+        const segments = colors.length; // includes wrap-around segment (last→first)
+        const segLen = this.gradientLength || 200;
+        const cyclePeriod = segLen * segments;
         const progress = (this._t++ % cyclePeriod) / cyclePeriod; // 0..1 repeating
         const pos = progress * segments;
-        const idx = Math.min(Math.floor(pos), segments - 1);
-        const localT = pos - idx;
+        const idx = Math.floor(pos) % colors.length;
+        const nextIdx = (idx + 1) % colors.length;
+        const localT = pos - Math.floor(pos);
         const hsv1 = this._rgbToHsv(colors[idx]);
-        const hsv2 = this._rgbToHsv(colors[idx + 1]);
+        const hsv2 = this._rgbToHsv(colors[nextIdx]);
         const h = this._lerp(hsv1.h, hsv2.h, localT);
         const s = this._lerp(hsv1.s, hsv2.s, localT);
         const v = this._lerp(hsv1.v, hsv2.v, localT);

@@ -288,10 +288,38 @@ export class CanvasEngine {
   }
 
   clear() {
+    // Force source-over so fillRect always works (mask modes like destination-in would block it)
+    this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.fillStyle = this.colorSystem.getBgColorCSS();
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this._applyCtxState();
     this._clearMaskState();
+  }
+
+  /** Swap background color without losing drawn content */
+  recolorBackground(oldBg, newBg) {
+    const w = this.canvas.width, h = this.canvas.height;
+    const imageData = this.ctx.getImageData(0, 0, w, h);
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] === oldBg.r && d[i+1] === oldBg.g && d[i+2] === oldBg.b && d[i+3] === 255) {
+        d[i] = newBg.r;
+        d[i+1] = newBg.g;
+        d[i+2] = newBg.b;
+      }
+    }
+    this.ctx.putImageData(imageData, 0, 0);
+    // Also update mask base if active
+    if (this._maskBase) {
+      const md = this._maskBase.data;
+      for (let i = 0; i < md.length; i += 4) {
+        if (md[i] === oldBg.r && md[i+1] === oldBg.g && md[i+2] === oldBg.b && md[i+3] === 255) {
+          md[i] = newBg.r;
+          md[i+1] = newBg.g;
+          md[i+2] = newBg.b;
+        }
+      }
+    }
   }
 
   undo() {
