@@ -1,3 +1,8 @@
 node_modules/
 dist/
 .DS_Store
+trippingfest/
+public/blend-test.html
+js/svg-exporter.js
+public/assets/assets/
+public/blend-test.html

@@ -2,6 +2,7 @@ import { MirrorSystem } from './mirror.js';
 import { ColorSystem } from './color.js';
 import { UndoStack } from './undo.js';
 import { createStroke, STROKE_CLASSES } from './strokes/stroke-registry.js';
+import { StrokeHistory, exportSVGBlob } from './svg-export.js';
 
 export class CanvasEngine {
   constructor(canvas) {
@@ -13,6 +14,7 @@ export class CanvasEngine {
     this.mirrorSystem = new MirrorSystem();
     this.colorSystem = new ColorSystem();
     this.undoStack = new UndoStack(this.ctx);
+    this.strokeHistory = new StrokeHistory();
 
     this.lineWidth = 12;
     this.lineCap = 'round';
@@ -80,7 +82,6 @@ export class CanvasEngine {
       'ADD': 'lighter',
     };
     const newOp = map[op] || 'source-over';
-    // Clear mask accumulation when switching away from a mask mode
     if (this._maskBase && newOp !== this._compositeOp) {
       this._clearMaskState();
     }
@@ -95,7 +96,16 @@ export class CanvasEngine {
   }
 
   _needsOffscreen() {
-    return ['source-in', 'source-out', 'source-atop', 'xor', 'destination-over', 'lighten'].includes(this._compositeOp);
+    // Only truly destructive Porter-Duff modes need offscreen compositing.
+    // In Android, all modes are applied via Paint.setXfermode() directly on the
+    // persistent bitmap. For Canvas2D, most modes work correctly with
+    // globalCompositeOperation directly. The mask modes (source-in, source-out,
+    // source-atop, xor) would destroy the canvas content if applied directly,
+    // so we use offscreen buffering for those.
+    // 
+    // destination-over and lighten do NOT need offscreen — they work correctly
+    // when applied directly via globalCompositeOperation, matching Android behavior.
+    return ['source-in', 'source-out', 'source-atop', 'xor'].includes(this._compositeOp);
   }
 
   _clearMaskState() {
@@ -125,8 +135,6 @@ export class CanvasEngine {
     this._offscreenCtx.lineWidth = this.lineWidth;
     this._offscreenCtx.lineCap = this.lineCap;
     this._offscreenCtx.lineJoin = 'round';
-    // destination-over: each new segment goes UNDER previous ones,
-    // so the start of the stroke is on top at self-intersections
     this._offscreenCtx.globalCompositeOperation = 'destination-over';
     this._offscreenCtx.globalAlpha = 1;
 
@@ -136,18 +144,14 @@ export class CanvasEngine {
     const sourceData = this._maskBase || this._preStrokeImageData;
     if (!this._cachedFgImageData ||
         this._cachedFgImageData.width !== w || this._cachedFgImageData.height !== h) {
-      // Allocate reusable buffer
       this._cachedFgImageData = new ImageData(w, h);
     }
     const src = sourceData.data;
     const dst = this._cachedFgImageData.data;
     const bg = this.colorSystem.bgColor;
-    const bgR = bg.r, bgG = bg.g, bgB = bg.b;
-    // Use Uint32Array view for faster 4-byte-at-a-time copy + comparison
+    const bgPixel = ((255 << 24) | (bg.b << 16) | (bg.g << 8) | bg.r) >>> 0;
     const src32 = new Uint32Array(src.buffer, src.byteOffset, src.length >> 2);
     const dst32 = new Uint32Array(dst.buffer, dst.byteOffset, dst.length >> 2);
-    // Build the bg pixel value for comparison (little-endian: ABGR)
-    const bgPixel = ((255 << 24) | (bgB << 16) | (bgG << 8) | bgR) >>> 0;
     for (let i = 0, len = src32.length; i < len; i++) {
       dst32[i] = src32[i] === bgPixel ? 0 : src32[i];
     }
@@ -177,7 +181,7 @@ export class CanvasEngine {
     this._isDrawing = true;
     this._strokeLength = 0;
     this._embossMinX = this._embossMinY = this._embossMaxX = this._embossMaxY = null;
-    this.undoStack.save();
+    this.undoStack.save(this.strokeHistory.snapshot());
     this.colorSystem.onNewStroke();
     this.mirrorSystem.setInitialPoint(x, y);
     this.mirrorSystem.randomizeCenter();
@@ -192,7 +196,6 @@ export class CanvasEngine {
           new Uint8ClampedArray(this._preStrokeImageData.data),
           this.canvas.width, this.canvas.height
         );
-        // Create accumulation canvas for collecting all mask strokes
         this._maskAccumCanvas = document.createElement('canvas');
         this._maskAccumCanvas.width = this.canvas.width;
         this._maskAccumCanvas.height = this.canvas.height;
@@ -203,13 +206,16 @@ export class CanvasEngine {
     } else {
       this._offscreenCtx = null;
       this._preStrokeImageData = null;
-      // Drawing with a non-mask mode resets the mask base
       if (this._maskBase) this._clearMaskState();
     }
 
     const renderCtx = this._getRenderCtx();
     const points = this.mirrorSystem.getTransformedPoints(x, y, this.canvas.width, this.canvas.height);
     this._prevPoints = points;
+
+    // Record stroke start — for Random stroke, record the delegate's name
+    const strokeName = this.activeStroke.delegateName || this.activeStroke.name;
+    this.strokeHistory.addStrokeStart(strokeName, this.lineWidth, this.lineCap, this._compositeOp);
 
     for (const p of points) {
       this.activeStroke.onStart(renderCtx, p.x, p.y, pressure);
@@ -245,6 +251,9 @@ export class CanvasEngine {
       this._strokeLength += Math.sqrt(dx * dx + dy * dy);
     }
 
+    // Record segment for SVG history
+    this.strokeHistory.addSegment(color, this._prevPoints || points, points, pressure);
+
     this._prevPoints = points;
 
     // Track bounding box for emboss
@@ -269,11 +278,11 @@ export class CanvasEngine {
       this.activeStroke.onEnd(renderCtx, p.x, p.y);
     }
     this._prevPoints = null;
+    this.strokeHistory.addStrokeEnd();
 
     // Final composite for offscreen modes
     if (this._offscreenCtx) {
       this._compositeOffscreen();
-      // Save accumulated strokes for next mask stroke
       if (this._maskAccumCtx) {
         this._maskAccumCtx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this._maskAccumCtx.drawImage(this._offscreenCanvas, 0, 0);
@@ -294,15 +303,14 @@ export class CanvasEngine {
   }
 
   clear() {
-    // Force source-over so fillRect always works (mask modes like destination-in would block it)
     this.ctx.globalCompositeOperation = 'source-over';
     this.ctx.fillStyle = this.colorSystem.getBgColorCSS();
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     this._applyCtxState();
     this._clearMaskState();
+    this.strokeHistory.addClear();
   }
 
-  /** Swap background color without losing drawn content */
   recolorBackground(oldBg, newBg) {
     const oldPixel = ((255 << 24) | (oldBg.b << 16) | (oldBg.g << 8) | oldBg.r) >>> 0;
     const newPixel = ((255 << 24) | (newBg.b << 16) | (newBg.g << 8) | newBg.r) >>> 0;
@@ -321,7 +329,10 @@ export class CanvasEngine {
   }
 
   undo() {
-    this.undoStack.undo();
+    const histLen = this.undoStack.undo();
+    if (histLen !== false && histLen !== undefined) {
+      this.strokeHistory.restoreSnapshot(histLen);
+    }
     this._clearMaskState();
   }
 
@@ -329,6 +340,10 @@ export class CanvasEngine {
     return new Promise(resolve => {
       this.canvas.toBlob(blob => resolve(blob), 'image/png');
     });
+  }
+
+  exportSVG() {
+    return exportSVGBlob(this, this.strokeHistory);
   }
 
   _applyCtxState() {

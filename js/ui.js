@@ -1,6 +1,7 @@
 import { getStrokeNames } from './strokes/stroke-registry.js';
 import { RecordingPlayer, RecordingRecorder } from './recording.js';
 import { WildWalk } from './wildwalk.js';
+import { GRADIENT_PRESETS, GRADIENT_TAGS } from './gradient-presets.js';
 
 export class UI {
   constructor(engine) {
@@ -38,15 +39,23 @@ export class UI {
       engine.undo();
     });
 
-    // Save PNG
-    document.getElementById('btn-save').addEventListener('click', async () => {
+    // Save — show format choice dialog
+    document.getElementById('btn-save').addEventListener('click', () => {
+      this._showDialog('save-dialog');
+    });
+
+    // PNG download
+    document.getElementById('btn-save-png').addEventListener('click', async () => {
+      document.getElementById('save-dialog').classList.add('hidden');
       const blob = await engine.exportPNG();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `trippingfest-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      this._downloadBlob(blob, `trippingfest-${Date.now()}.png`);
+    });
+
+    // SVG download
+    document.getElementById('btn-save-svg').addEventListener('click', () => {
+      document.getElementById('save-dialog').classList.add('hidden');
+      const blob = engine.exportSVG();
+      this._downloadBlob(blob, `trippingfest-${Date.now()}.svg`);
     });
 
     // Record toggle
@@ -111,7 +120,6 @@ export class UI {
     this._buildColorDialog();
     this._buildOptionsDialog();
     this._buildPlaybackDialog();
-
   }
 
   _showDialog(id) {
@@ -120,7 +128,6 @@ export class UI {
 
     const sheet = dialog.querySelector('.dialog-sheet');
 
-    // Close on backdrop/overlay click
     const handler = (e) => {
       if (e.target === dialog || e.target.classList.contains('dialog-backdrop')) {
         dialog.classList.add('hidden');
@@ -135,7 +142,6 @@ export class UI {
       let startY = 0, currentY = 0, dragging = false;
 
       sheet.addEventListener('touchstart', (e) => {
-        // Only start drag from the top 40px (handle area) or if scrolled to top
         const touchY = e.touches[0].clientY;
         const sheetRect = sheet.getBoundingClientRect();
         const isAtTop = sheet.scrollTop <= 0;
@@ -164,7 +170,6 @@ export class UI {
         const dy = currentY - startY;
         sheet.style.transition = 'transform 0.2s ease-out';
         if (dy > 80) {
-          // Dismiss
           sheet.style.transform = `translateY(100%)`;
           setTimeout(() => {
             dialog.classList.add('hidden');
@@ -206,6 +211,7 @@ export class UI {
       { id: 'simple', label: 'Simple' },
       { id: 'gradient', label: 'Gradient' },
       { id: 'multiGradient', label: 'Multi Gradient' },
+      { id: 'presetGradient', label: 'Preset Gradients' },
       { id: 'random', label: 'Random' },
       { id: 'rangedRandom', label: 'Ranged Random' },
       { id: 'smoothRandom', label: 'Smooth Random' },
@@ -235,6 +241,12 @@ export class UI {
     const controls = document.getElementById('color-controls');
     const cs = this.engine.colorSystem;
     controls.innerHTML = '';
+
+    // ── Preset Gradients picker ──
+    if (cs.mode === 'presetGradient') {
+      this._buildPresetGradientPicker(controls, cs);
+      return; // presetGradient has its own full UI, skip the rest
+    }
 
     if (cs.mode === 'simple' || cs.mode === 'gradient' || cs.mode === 'rangedRandom') {
       const label1 = document.createElement('label');
@@ -311,7 +323,6 @@ export class UI {
       controls.appendChild(container);
     }
 
-    // Gradient length slider for gradient modes
     if (cs.mode === 'gradient' || cs.mode === 'multiGradient') {
       const lenLabel = document.createElement('label');
       lenLabel.textContent = 'Gradient Length: ';
@@ -361,6 +372,144 @@ export class UI {
     });
     bgLabel.appendChild(bgInput);
     controls.appendChild(bgLabel);
+  }
+
+  _buildPresetGradientPicker(controls, cs) {
+    // Category filter tabs
+    const filterRow = document.createElement('div');
+    filterRow.style.cssText = 'display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px';
+    let activeTag = 'all';
+
+    const renderPresets = () => {
+      // Clear old preset cards
+      const oldGrid = controls.querySelector('.preset-grid');
+      if (oldGrid) oldGrid.remove();
+
+      const grid = document.createElement('div');
+      grid.className = 'preset-grid';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px';
+
+      const filtered = activeTag === 'all'
+        ? GRADIENT_PRESETS
+        : GRADIENT_PRESETS.filter(p => p.tag === activeTag);
+
+      for (const preset of filtered) {
+        const card = document.createElement('div');
+        card.style.cssText = 'cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid transparent;transition:all 0.15s;background:rgba(255,255,255,0.05)';
+
+        // Gradient swatch
+        const swatch = document.createElement('div');
+        const stops = preset.colors.map((c, i) => {
+          const pct = (i / (preset.colors.length - 1)) * 100;
+          return `rgb(${c.r},${c.g},${c.b}) ${pct}%`;
+        }).join(',');
+        swatch.style.cssText = `height:36px;background:linear-gradient(90deg,${stops});border-radius:8px 8px 0 0`;
+
+        // Label
+        const label = document.createElement('div');
+        label.style.cssText = 'padding:6px 8px;font-size:11px;font-weight:500;color:rgba(255,255,255,0.8)';
+        label.textContent = preset.name;
+
+        // Tag badge
+        const badge = document.createElement('span');
+        badge.style.cssText = 'float:right;font-size:9px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.5px';
+        badge.textContent = preset.tag;
+        label.appendChild(badge);
+
+        card.appendChild(swatch);
+        card.appendChild(label);
+
+        // Hover
+        card.addEventListener('mouseenter', () => { card.style.borderColor = 'rgba(96,165,250,0.5)'; });
+        card.addEventListener('mouseleave', () => { card.style.borderColor = 'transparent'; });
+
+        // Click — apply preset
+        card.addEventListener('click', () => {
+          cs.gradientColors = preset.colors.map(c => ({ ...c }));
+          cs.mode = 'multiGradient'; // switch rendering to multiGradient
+          cs._t = 0;
+
+          // Briefly highlight the selected card
+          grid.querySelectorAll('div').forEach(d => { d.style.borderColor = 'transparent'; });
+          card.style.borderColor = '#60a5fa';
+
+          // Show active gradient length control below
+          this._appendGradientLengthControl(controls, cs);
+        });
+
+        grid.appendChild(card);
+      }
+
+      controls.appendChild(grid);
+    };
+
+    // Build filter tabs
+    for (const tag of GRADIENT_TAGS) {
+      const btn = document.createElement('button');
+      btn.textContent = tag === 'all' ? 'All' : tag.charAt(0).toUpperCase() + tag.slice(1);
+      btn.style.cssText = 'padding:5px 10px;font-size:11px;font-weight:500;border-radius:8px;cursor:pointer;transition:all 0.15s;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);background:' + (tag === 'all' ? 'rgba(96,165,250,0.25)' : 'rgba(255,255,255,0.06)');
+      btn.addEventListener('click', () => {
+        activeTag = tag;
+        filterRow.querySelectorAll('button').forEach(b => {
+          b.style.background = 'rgba(255,255,255,0.06)';
+          b.style.color = 'rgba(255,255,255,0.7)';
+        });
+        btn.style.background = 'rgba(96,165,250,0.25)';
+        btn.style.color = '#60a5fa';
+        renderPresets();
+      });
+      filterRow.appendChild(btn);
+    }
+
+    controls.appendChild(filterRow);
+    renderPresets();
+
+    // Gradient length control at the bottom
+    this._appendGradientLengthControl(controls, cs);
+
+    // Background color
+    const bgLabel = document.createElement('label');
+    bgLabel.textContent = 'Background: ';
+    bgLabel.style.cssText = 'margin-top:10px';
+    const bgInput = document.createElement('input');
+    bgInput.type = 'color';
+    bgInput.value = this._rgbToHex(cs.bgColor);
+    bgInput.addEventListener('input', () => {
+      const oldBg = { ...cs.bgColor };
+      const newBg = this._hexToRgb(bgInput.value);
+      this.engine.recolorBackground(oldBg, newBg);
+      cs.bgColor = newBg;
+    });
+    bgLabel.appendChild(bgInput);
+    controls.appendChild(bgLabel);
+  }
+
+  _appendGradientLengthControl(controls, cs) {
+    // Remove existing if present
+    const existing = controls.querySelector('.preset-gradient-length');
+    if (existing) existing.remove();
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'preset-gradient-length';
+    wrapper.style.cssText = 'margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08)';
+    const lenLabel = document.createElement('label');
+    lenLabel.textContent = 'Gradient Length: ';
+    const lenInput = document.createElement('input');
+    lenInput.type = 'range';
+    lenInput.min = '50';
+    lenInput.max = '1000';
+    lenInput.step = '10';
+    lenInput.value = String(cs.gradientLength);
+    const lenVal = document.createElement('span');
+    lenVal.textContent = ` ${cs.gradientLength}px`;
+    lenInput.addEventListener('input', () => {
+      cs.gradientLength = parseInt(lenInput.value);
+      lenVal.textContent = ` ${cs.gradientLength}px`;
+    });
+    lenLabel.appendChild(lenInput);
+    lenLabel.appendChild(lenVal);
+    wrapper.appendChild(lenLabel);
+    controls.appendChild(wrapper);
   }
 
   _buildOptionsDialog() {
@@ -518,7 +667,7 @@ export class UI {
     capLabel.appendChild(capSelect);
     transpCtrl.appendChild(capLabel);
 
-    // Drawing mode
+    // Drawing mode (Crazy Mode)
     const modeLabel = document.createElement('label');
     const modeCb = document.createElement('input');
     modeCb.type = 'checkbox';
@@ -600,6 +749,15 @@ export class UI {
     if (this.recorder.recording) {
       this.recorder.recordMove(x, y, pressure);
     }
+  }
+
+  _downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   _rgbToHex(c) {
