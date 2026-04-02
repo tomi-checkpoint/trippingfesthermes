@@ -232,16 +232,29 @@ export class CanvasEngine {
     const sameColor = this.mirrorSystem.sameColor;
     const color = this.colorSystem.getColor(this._strokeLength, 0);
 
+    // When sameColor is off, pre-generate distinct colors per mirror.
+    // Android calls getColor() once per mirror (advancing the RNG each time),
+    // but the hue step is so small (7°) that adjacent mirrors look identical.
+    // Instead we spread colors evenly around the hue wheel for visible contrast.
+    let mirrorColors = null;
+    if (!sameColor && points.length > 1) {
+      const cs = this.colorSystem;
+      const alpha = (cs.transparency / 100) * (cs.colorAlpha / 100);
+      const baseHue = cs._currentHue || Math.random() * 360;
+      mirrorColors = [];
+      for (let i = 0; i < points.length; i++) {
+        const hue = (baseHue + (i * 360) / points.length) % 360;
+        mirrorColors.push(`hsla(${hue|0},90%,55%,${alpha})`);
+      }
+    }
+
     for (let i = 0; i < points.length; i++) {
-      if (sameColor || i === 0) {
-        // Same color for all mirrors, or this is the primary stroke
+      if (sameColor || !mirrorColors) {
         renderCtx.strokeStyle = color;
         renderCtx.fillStyle = color;
       } else {
-        // Each mirror copy gets its own color
-        const mirrorColor = this.colorSystem.getColor(this._strokeLength + i * 50, i);
-        renderCtx.strokeStyle = mirrorColor;
-        renderCtx.fillStyle = mirrorColor;
+        renderCtx.strokeStyle = mirrorColors[i];
+        renderCtx.fillStyle = mirrorColors[i];
       }
       const p = points[i];
       const prev = this._prevPoints && this._prevPoints[i] ? this._prevPoints[i] : p;
