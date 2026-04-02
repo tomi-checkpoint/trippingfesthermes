@@ -229,11 +229,20 @@ export class CanvasEngine {
     const points = this.mirrorSystem.getTransformedPoints(x, y, this.canvas.width, this.canvas.height);
 
     // Get color for this segment
+    const sameColor = this.mirrorSystem.sameColor;
     const color = this.colorSystem.getColor(this._strokeLength, 0);
-    renderCtx.strokeStyle = color;
-    renderCtx.fillStyle = color;
 
     for (let i = 0; i < points.length; i++) {
+      if (sameColor || i === 0) {
+        // Same color for all mirrors, or this is the primary stroke
+        renderCtx.strokeStyle = color;
+        renderCtx.fillStyle = color;
+      } else {
+        // Each mirror copy gets its own color
+        const mirrorColor = this.colorSystem.getColor(this._strokeLength + i * 50, i);
+        renderCtx.strokeStyle = mirrorColor;
+        renderCtx.fillStyle = mirrorColor;
+      }
       const p = points[i];
       const prev = this._prevPoints && this._prevPoints[i] ? this._prevPoints[i] : p;
       this.activeStroke.onMove(renderCtx, prev.x, prev.y, p.x, p.y, pressure);
