@@ -228,33 +228,26 @@ export class CanvasEngine {
     const renderCtx = this._getRenderCtx();
     const points = this.mirrorSystem.getTransformedPoints(x, y, this.canvas.width, this.canvas.height);
 
-    // Get color for this segment
+    // Get color for this segment.
+    // When sameColor is off, Android calls getColor() independently for each
+    // mirror copy, advancing the color generator each time. This means each
+    // mirror is at a slightly different point in the gradient/random cycle —
+    // the colors stay within the same mode and palette but diverge over time.
     const sameColor = this.mirrorSystem.sameColor;
     const color = this.colorSystem.getColor(this._strokeLength, 0);
 
-    // When sameColor is off, pre-generate distinct colors per mirror.
-    // Android calls getColor() once per mirror (advancing the RNG each time),
-    // but the hue step is so small (7°) that adjacent mirrors look identical.
-    // Instead we spread colors evenly around the hue wheel for visible contrast.
-    let mirrorColors = null;
-    if (!sameColor && points.length > 1) {
-      const cs = this.colorSystem;
-      const alpha = (cs.transparency / 100) * (cs.colorAlpha / 100);
-      const baseHue = cs._currentHue || Math.random() * 360;
-      mirrorColors = [];
-      for (let i = 0; i < points.length; i++) {
-        const hue = (baseHue + (i * 360) / points.length) % 360;
-        mirrorColors.push(`hsla(${hue|0},90%,55%,${alpha})`);
-      }
-    }
-
     for (let i = 0; i < points.length; i++) {
-      if (sameColor || !mirrorColors) {
+      if (sameColor || points.length <= 1) {
+        renderCtx.strokeStyle = color;
+        renderCtx.fillStyle = color;
+      } else if (i === 0) {
         renderCtx.strokeStyle = color;
         renderCtx.fillStyle = color;
       } else {
-        renderCtx.strokeStyle = mirrorColors[i];
-        renderCtx.fillStyle = mirrorColors[i];
+        // Each mirror copy advances the color generator independently
+        const mirrorColor = this.colorSystem.getColor(this._strokeLength, i);
+        renderCtx.strokeStyle = mirrorColor;
+        renderCtx.fillStyle = mirrorColor;
       }
       const p = points[i];
       const prev = this._prevPoints && this._prevPoints[i] ? this._prevPoints[i] : p;
