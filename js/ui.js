@@ -30,7 +30,7 @@ export class UI {
 
     // Clear
     document.getElementById('btn-clear').addEventListener('click', () => {
-      engine.undoStack.save();
+      engine.undoStack.save(engine.strokeHistory.snapshot());
       engine.clear();
     });
 
@@ -60,11 +60,12 @@ export class UI {
 
     // Record toggle
     const btnRecord = document.getElementById('btn-record');
+    const recordSvgHTML = btnRecord.innerHTML; // Save original SVG icon
     btnRecord.addEventListener('click', () => {
       if (this._isRecording) {
         this._isRecording = false;
         btnRecord.classList.remove('active');
-        btnRecord.textContent = 'Rec';
+        btnRecord.innerHTML = recordSvgHTML; // Restore SVG icon
         const text = this.recorder.stop();
         // Download recording
         const blob = new Blob([text], { type: 'text/plain' });
@@ -77,7 +78,7 @@ export class UI {
       } else {
         this._isRecording = true;
         btnRecord.classList.add('active');
-        btnRecord.textContent = 'Stop';
+        btnRecord.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor"/></svg>'; // Stop icon
         this.recorder.start(engine);
       }
     });

@@ -7,7 +7,7 @@ export class MirrorSystem {
     this.polar = false;          // N-fold radial
     this.polarCentered = true;   // polar rotation around canvas center (vs touch point)
     this.sameColor = true;       // same color for all mirrors
-    this.polarFolds = 0;         // number of polar subdivisions
+    this.polarFolds = 6;         // number of polar subdivisions (default 6, matching UI)
     this.offCenter = false;      // randomize mirror center
     this._offCenterX = 0.5;     // normalized offset (0-1)
     this._offCenterY = 0.5;

@@ -343,6 +343,7 @@ export class CanvasEngine {
       this.strokeHistory.restoreSnapshot(histLen);
     }
     this._clearMaskState();
+    this._applyCtxState();
   }
 
   exportPNG() {
