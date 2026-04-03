@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html><head><title>Mirror Color Test</title></head>
+<body style="background:#000;color:#fff;font-family:monospace;padding:20px">
+<h2>Mirror Color Test</h2>
+<canvas id="c" width="600" height="400" style="border:1px solid #333"></canvas>
+<pre id="log"></pre>
+<script type="module">
+import { CanvasEngine } from '/js/canvas-engine.js';
+
+const canvas = document.getElementById('c');
+const engine = new CanvasEngine(canvas);
+const log = document.getElementById('log');
+
+function addLog(msg) {
+  log.textContent += msg + '\n';
+}
+
+// Setup
+engine.clear();
+engine.lineWidth = 15;
+engine.mirrorSystem.vertical = true;
+engine.mirrorSystem.sameColor = false;
+
+addLog(`mirrorSystem.vertical = ${engine.mirrorSystem.vertical}`);
+addLog(`mirrorSystem.sameColor = ${engine.mirrorSystem.sameColor}`);
+addLog(`colorSystem.mode = ${engine.colorSystem.mode}`);
+addLog('');
+
+// Simulate a stroke across the canvas
+const ctx = engine.ctx;
+const y = 200;
+
+// Intercept strokeStyle changes during drawing
+const originalSet = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'strokeStyle').set;
+const colors = [];
+Object.defineProperty(ctx, 'strokeStyle', {
+  set(v) {
+    colors.push(v);
+    originalSet.call(this, v);
+  },
+  get() {
+    return Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'strokeStyle').get.call(this);
+  }
+});
+
+engine.onPointerStart(100, y, 0);
+for (let x = 110; x <= 500; x += 10) {
+  engine.onPointerMove(x, y, 0);
+}
+engine.onPointerEnd(500, y);
+
+addLog(`Total strokeStyle assignments: ${colors.length}`);
+addLog('');
+
+// Analyze: group colors by pairs (original + mirror for each move)
+const points = engine.mirrorSystem.getTransformedPoints(300, y, canvas.width, canvas.height);
+addLog(`Mirror points for (300,${y}): ${JSON.stringify(points.map(p => ({x:Math.round(p.x), y:Math.round(p.y)})))}`);
+addLog(`Points count: ${points.length}`);
+addLog('');
+
+// Show first 20 color assignments
+addLog('First 20 strokeStyle values:');
+for (let i = 0; i < Math.min(20, colors.length); i++) {
+  const isPrimary = (i % points.length) === 0;
+  addLog(`  [${i}] ${isPrimary ? 'PRIMARY' : 'MIRROR '} ${colors[i]}`);
+}
+
+// Check if any adjacent pairs are different
+let diffCount = 0;
+for (let i = 0; i < colors.length - 1; i += points.length) {
+  if (points.length > 1 && colors[i] !== colors[i+1]) {
+    diffCount++;
+  }
+}
+addLog('');
+addLog(`Segments where primary != mirror: ${diffCount} out of ${Math.floor(colors.length / points.length)}`);
+addLog(diffCount > 0 ? '✅ PASS: Mirror colors ARE different' : '❌ FAIL: Mirror colors are IDENTICAL');
+</script>
+</body>
+</html>
