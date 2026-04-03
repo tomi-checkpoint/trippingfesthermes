@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trippingfesthermes-v1';
+const CACHE_NAME = 'trippingfesthermes-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
