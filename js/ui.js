@@ -397,7 +397,7 @@ export class UI {
       for (const preset of filtered) {
         const card = document.createElement('button');
         card.type = 'button';
-        card.style.cssText = 'cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid transparent;transition:all 0.15s;background:rgba(255,255,255,0.05);padding:0;text-align:left;display:block;width:100%';
+        card.style.cssText = 'cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid transparent;transition:all 0.15s;background:rgba(255,255,255,0.05);padding:0;text-align:left;font:inherit';
 
         // Gradient swatch
         const swatch = document.createElement('div');
