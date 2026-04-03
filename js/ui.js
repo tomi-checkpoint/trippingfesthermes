@@ -395,8 +395,9 @@ export class UI {
         : GRADIENT_PRESETS.filter(p => p.tag === activeTag);
 
       for (const preset of filtered) {
-        const card = document.createElement('div');
-        card.style.cssText = 'cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid transparent;transition:all 0.15s;background:rgba(255,255,255,0.05)';
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.style.cssText = 'cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid transparent;transition:all 0.15s;background:rgba(255,255,255,0.05);padding:0;text-align:left;display:block;width:100%';
 
         // Gradient swatch
         const swatch = document.createElement('div');
@@ -431,7 +432,7 @@ export class UI {
           cs._t = 0;
 
           // Briefly highlight the selected card
-          grid.querySelectorAll('div').forEach(d => { d.style.borderColor = 'transparent'; });
+          grid.querySelectorAll('button').forEach(d => { d.style.borderColor = 'transparent'; });
           card.style.borderColor = '#60a5fa';
 
           // Show active gradient length control below
