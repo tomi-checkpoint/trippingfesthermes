@@ -228,11 +228,7 @@ export class CanvasEngine {
     const renderCtx = this._getRenderCtx();
     const points = this.mirrorSystem.getTransformedPoints(x, y, this.canvas.width, this.canvas.height);
 
-    // Get color for this segment.
-    // When sameColor is off, Android calls getColor() independently for each
-    // mirror copy, advancing the color generator each time. This means each
-    // mirror is at a slightly different point in the gradient/random cycle —
-    // the colors stay within the same mode and palette but diverge over time.
+    // Get color for this segment
     const sameColor = this.mirrorSystem.sameColor;
     const color = this.colorSystem.getColor(this._strokeLength, 0);
 
@@ -240,12 +236,12 @@ export class CanvasEngine {
       if (sameColor || points.length <= 1) {
         renderCtx.strokeStyle = color;
         renderCtx.fillStyle = color;
-      } else if (i === 0) {
-        renderCtx.strokeStyle = color;
-        renderCtx.fillStyle = color;
       } else {
-        // Each mirror copy advances the color generator independently
-        const mirrorColor = this.colorSystem.getColor(this._strokeLength, i);
+        // Each mirror copy gets a color-mode-aware offset color.
+        // We derive mirror colors from the primary by shifting the hue
+        // proportionally around the wheel, keeping saturation and lightness
+        // from the original color mode output.
+        const mirrorColor = this._getMirrorColor(color, i, points.length);
         renderCtx.strokeStyle = mirrorColor;
         renderCtx.fillStyle = mirrorColor;
       }
@@ -360,6 +356,45 @@ export class CanvasEngine {
 
   exportSVG() {
     return exportSVGBlob(this, this.strokeHistory);
+  }
+
+  /**
+   * Shift a CSS color string's hue for mirror copies.
+   * Parses rgba/hsla, offsets hue by (index/total)*360, returns CSS string.
+   */
+  _getMirrorColor(cssColor, mirrorIndex, totalMirrors) {
+    const hueShift = (mirrorIndex / totalMirrors) * 360;
+
+    // Parse hsla(h, s%, l%, a)
+    const hslaMatch = cssColor.match(/hsla?\(([^,]+),\s*([^,]+),\s*([^,)]+)(?:,\s*([^)]+))?\)/);
+    if (hslaMatch) {
+      const h = (parseFloat(hslaMatch[1]) + hueShift) % 360;
+      return `hsla(${h|0},${hslaMatch[2]},${hslaMatch[3]},${hslaMatch[4] || '1'})`;
+    }
+
+    // Parse rgba(r, g, b, a)
+    const rgbaMatch = cssColor.match(/rgba?\(([^,]+),\s*([^,]+),\s*([^,)]+)(?:,\s*([^)]+))?\)/);
+    if (rgbaMatch) {
+      const r = parseInt(rgbaMatch[1]) / 255;
+      const g = parseInt(rgbaMatch[2]) / 255;
+      const b = parseInt(rgbaMatch[3]) / 255;
+      const a = rgbaMatch[4] || '1';
+      // RGB to HSL
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      const l = (max + min) / 2;
+      let h = 0, s = 0;
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        else if (max === g) h = ((b - r) / d + 2) / 6;
+        else h = ((r - g) / d + 4) / 6;
+      }
+      const newH = ((h * 360) + hueShift) % 360;
+      return `hsla(${newH|0},${(s*100)|0}%,${(l*100)|0}%,${a})`;
+    }
+
+    return cssColor; // fallback
   }
 
   _applyCtxState() {
